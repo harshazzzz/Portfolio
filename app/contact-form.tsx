@@ -1,8 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
-import { saveContactMessage, type ContactFormState } from "./actions";
+import { type FormEvent, useState } from "react";
 import styles from "./page.module.css";
+
+type ContactFormState = {
+  message: string;
+  status: "idle" | "success" | "error";
+};
 
 const initialState: ContactFormState = {
   message: "",
@@ -10,13 +14,60 @@ const initialState: ContactFormState = {
 };
 
 export function ContactForm() {
-  const [state, formAction, pending] = useActionState(
-    saveContactMessage,
-    initialState,
-  );
+  const [state, setState] = useState<ContactFormState>(initialState);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const body = new URLSearchParams();
+
+    formData.forEach((value, key) => {
+      if (typeof value === "string") {
+        body.append(key, value);
+      }
+    });
+
+    setPending(true);
+    setState(initialState);
+
+    try {
+      const response = await fetch("/__forms.html", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+      });
+
+      if (!response.ok) {
+        throw new Error("Form submission failed");
+      }
+
+      form.reset();
+      setState({
+        status: "success",
+        message: "Message sent successfully. I will get back to you soon.",
+      });
+    } catch {
+      setState({
+        status: "error",
+        message: "Message could not be sent. Please try again.",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <form action={formAction} className={styles.contactForm}>
+    <form
+      name="contact"
+      method="POST"
+      onSubmit={handleSubmit}
+      className={styles.contactForm}
+    >
+      <input type="hidden" name="form-name" value="contact" />
+
       <div className={styles.formGrid}>
         <label className={styles.formField}>
           <span>Name</span>
@@ -56,7 +107,7 @@ export function ContactForm() {
 
       <div className={styles.formFooter}>
         <button type="submit" disabled={pending} className={styles.submitButton}>
-          {pending ? "Saving..." : "Send Message"}
+          {pending ? "Sending..." : "Send Message"}
         </button>
 
         {state.message ? (
